@@ -1,176 +1,925 @@
-# ═══════════════════════════════════════════════════════════════════════════════
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sarthi</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue-50: #EBF4FF;
+    --blue-100: #C8E2FF;
+    --blue-200: #A0CAFF;
+    --blue-400: #5BA3F5;
+    --blue-600: #2979D9;
+    --blue-800: #1A4F9C;
+    --blue-900: #0D2E5E;
+    --slate-50: #F7F9FC;
+    --slate-100: #EEF2F8;
+    --slate-200: #DDE4F0;
+    --slate-300: #C4CFDF;
+    --slate-500: #7A8BA8;
+    --slate-700: #3E506B;
+    --slate-900: #1A2535;
+    --teal-50: #E6F7F4;
+    --teal-100: #B8EAE2;
+    --teal-400: #2BBFA5;
+    --teal-600: #1A8C78;
+    --lavender-50: #F0EEFE;
+    --lavender-200: #C9C3F8;
+    --lavender-600: #7066D4;
+    --bg: #F4F7FC;
+    --surface: #FFFFFF;
+    --border: rgba(100,130,180,0.13);
+    --border-md: rgba(100,130,180,0.22);
+    --text-primary: #1A2535;
+    --text-secondary: #4A5E7A;
+    --text-muted: #7A8BA8;
+    --accent: #3B82F6;
+    --accent-light: #EBF4FF;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+  }
 
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-_VIZ_SYSTEM = """
-You are a data visualization expert. Given a user's question, the SQL query
-that answered it, and the resulting column names and sample data, decide the
-best chart type and axis configuration.
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
 
-CRITICAL RULE — USER-REQUESTED CHART TYPE:
-If the user's question explicitly mentions a chart type (e.g. "pie chart",
-"bar graph", "line chart", "scatter plot"), you MUST evaluate whether that
-type is feasible for the data:
-  - If FEASIBLE: use exactly that chart type. Do not override the user's choice.
-  - If NOT FEASIBLE: choose the best alternative AND explain clearly in REASONING
-    why the user's requested type cannot work for this data, then say what you
-    chose instead and why it works better.
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 240px; min-width: 240px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-header { padding: 22px 20px 16px; border-bottom: 1px solid var(--border); }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-text { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--text-primary); letter-spacing: -0.3px; }
+  .logo-sub { font-size: 10px; color: var(--text-muted); letter-spacing: 0.8px; text-transform: uppercase; font-weight: 500; margin-top: 1px; }
 
-Feasibility rules:
-  - pie      : feasible when result has 1 category column + 1 numeric column
-                AND ≤ 25 rows (slices). If rows > 25, use bar and explain why.
-                If user asks pie and the data fits these rules, USE pie — do not
-                override to bar just because there are many categories.
-  - bar      : always feasible for category + numeric combinations
-  - line     : feasible when x-axis is a time/ordered sequence
-  - scatter  : feasible when 2 numeric columns exist
-  - area     : feasible when x-axis is a time/ordered sequence
-  - heatmap  : feasible when 2 categorical + 1 numeric column exist
-  - table    : always feasible (fallback for complex multi-column results)
+  .new-chat-btn {
+    margin: 14px 16px 0;
+    padding: 9px 14px;
+    background: var(--accent-light);
+    border: 1px solid var(--blue-200);
+    border-radius: var(--radius-md);
+    color: var(--blue-800);
+    font-size: 13px; font-weight: 500;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 7px;
+    transition: background 0.15s;
+    font-family: 'DM Sans', sans-serif;
+    width: calc(100% - 32px);
+  }
+  .new-chat-btn:hover { background: var(--blue-100); }
+  .new-chat-btn svg { width: 15px; height: 15px; }
 
-Return ONLY this exact format — no markdown, no explanation outside the fields:
+  .sidebar-section-label { padding: 16px 20px 6px; font-size: 10px; letter-spacing: 0.9px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
 
-CHART_TYPE: <one of: bar, line, pie, scatter, area, heatmap, table>
-TITLE: <concise chart title, max 10 words>
-X_AXIS: <exact column name or alias from Result Columns to use as primary/category axis, or NONE>
-Y_AXIS: <exact column name or alias from Result Columns to use as primary value axis, or NONE>
-SECONDARY_AXIS: <exact column name or alias from Result Columns for secondary value axis, or NONE>
-SERIES_LABEL: <exact column name or alias from Result Columns to distinguish series/legend, or NONE>
-REASONING: <2-3 sentences. If user requested a specific chart type, start with
-            either "Used [type] as requested — feasible because..." or
-            "User requested [type] but it is not feasible here because [specific reason].
-            Using [alternative] instead because [specific reason it works better].">
-"""
+  .history-list { flex: 1; overflow-y: auto; padding: 0 10px 16px; }
+  .history-list::-webkit-scrollbar { width: 4px; }
+  .history-list::-webkit-scrollbar-thumb { background: var(--slate-200); border-radius: 4px; }
 
+  .history-item {
+    padding: 9px 12px; border-radius: var(--radius-sm);
+    font-size: 12.5px; color: var(--text-secondary);
+    cursor: pointer; display: flex; align-items: flex-start; gap: 8px;
+    transition: background 0.12s; line-height: 1.4;
+  }
+  .history-item:hover { background: var(--slate-50); color: var(--text-primary); }
+  .history-item.active { background: var(--accent-light); color: var(--blue-800); }
+  .history-item svg { width: 13px; height: 13px; flex-shrink: 0; margin-top: 2px; opacity: 0.5; }
 
-# ═══════════════════════════════════════════════════════════════════════════════
+  .sidebar-footer { border-top: 1px solid var(--border); padding: 14px 16px; }
+  .db-status { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-muted); }
+  .db-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal-400); flex-shrink: 0; animation: pulse-dot 2s ease-in-out infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
+  /* ── Main ── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
 
-_VIZ_HUMAN = """
-## User Question
-{question}
+  .topbar {
+    height: 56px; min-height: 56px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 24px; gap: 12px;
+  }
+  .topbar-title { font-size: 14px; font-weight: 500; color: var(--text-secondary); flex: 1; }
+  .topbar-badge { font-size: 11px; background: var(--teal-50); color: var(--teal-600); border: 1px solid var(--teal-100); border-radius: 20px; padding: 3px 10px; font-weight: 500; }
 
-## User-Requested Chart Type (extracted from question, or "not specified")
-{user_requested_chart}
+  /* ── Chat area ── */
+  .chat-area { flex: 1; overflow-y: auto; padding: 28px 0; display: flex; flex-direction: column; gap: 0; }
+  .chat-area::-webkit-scrollbar { width: 5px; }
+  .chat-area::-webkit-scrollbar-thumb { background: var(--slate-200); border-radius: 4px; }
 
-## SQL Used
-{sql}
+  .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 32px; text-align: center; gap: 20px; }
+  .welcome h1 { font-family: 'DM Serif Display', serif; font-size: 26px; color: var(--text-primary); letter-spacing: -0.5px; }
+  .welcome p { font-size: 14px; color: var(--text-muted); max-width: 380px; line-height: 1.6; }
 
-## Result Columns
-{columns}
+  /* ── Message rows ── */
+  .msg-row { display: flex; padding: 6px 28px; gap: 14px; animation: fadeUp 0.22s ease; }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  .msg-row.user { justify-content: flex-end; }
 
-## Number of Result Rows
-{row_count}
+  .avatar { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; margin-top: 2px; }
+  .avatar.ai { background: linear-gradient(135deg, var(--blue-400), var(--teal-400)); color: white; }
+  .avatar.user-av { background: var(--lavender-50); color: var(--lavender-600); border: 1px solid var(--lavender-200); }
 
-## Sample Data (first 5 rows)
-{sample_data}
+  .bubble-wrap { flex: 1; max-width: 680px; display: flex; flex-direction: column; gap: 10px; }
+  .msg-row.user .bubble-wrap { align-items: flex-end; max-width: 480px; }
 
-Return the visualization metadata now:
-"""
+  .bubble { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 13px 17px; font-size: 14px; line-height: 1.65; color: var(--text-primary); }
+  .bubble.user-bubble { background: var(--blue-600); border-color: var(--blue-600); color: white; border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg); }
+  .bubble.ai-bubble { border-radius: 4px var(--radius-lg) var(--radius-lg) var(--radius-lg); }
 
+  /* ── Timestamp ── */
+  .msg-ts {
+    font-size: 10px;
+    color: var(--text-muted);
+    padding: 2px 4px;
+    align-self: flex-end;
+    opacity: 0.7;
+    letter-spacing: 0.2px;
+    margin-top: -4px;
+  }
+  .msg-row.user .msg-ts { align-self: flex-end; }
 
-# ═══════════════════════════════════════════════════════════════════════════════
+  /* ── Thinking block ── */
+  .thinking-block { background: var(--slate-50); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .thinking-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; user-select: none; font-size: 12.5px; font-weight: 500; color: var(--text-secondary); transition: background 0.12s; }
+  .thinking-header:hover { background: var(--slate-100); }
+  .thinking-header svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .thinking-chevron { margin-left: auto; transition: transform 0.2s; }
+  .thinking-chevron.open { transform: rotate(180deg); }
+  .thinking-body { display: none; padding: 0 14px 12px; border-top: 1px solid var(--border); }
+  .thinking-body.open { display: block; }
 
+  .thinking-step { display: flex; gap: 10px; padding: 8px 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.55; border-bottom: 1px solid var(--border); animation: fadeUp 0.2s ease; }
+  .thinking-step:last-child { border-bottom: none; }
 
-class VizMetaAgent:
+  .step-icon { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-top: 1px; font-size: 10px; }
+  .step-icon.tables { background: var(--blue-50); color: var(--blue-600); }
+  .step-icon.sql    { background: var(--teal-50); color: var(--teal-600); }
+  .step-icon.viz    { background: var(--lavender-50); color: var(--lavender-600); }
+  .step-icon.done   { background: #EDF7ED; color: #2E7D32; }
+  .step-icon.err    { background: #FFF3F3; color: #B71C1C; }
 
-    # Chart type keywords to detect from natural language
-    _CHART_KEYWORDS = {
-        "pie":     ["pie chart", "pie graph", "pie"],
-        "bar":     ["bar chart", "bar graph", "bar"],
-        "line":    ["line chart", "line graph", "trend", "over time"],
-        "scatter": ["scatter", "scatter plot", "correlation"],
-        "area":    ["area chart", "area graph", "stacked area"],
-        "heatmap": ["heatmap", "heat map"],
-        "table":   ["table", "tabular", "list"],
+  /* ── Typing dots (for initial wait only) ── */
+  .typing-indicator { display: flex; gap: 4px; align-items: center; padding: 14px 17px; }
+  .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--slate-300); animation: bounce 1.2s ease-in-out infinite; }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+
+  /* ── Meta grid ── */
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .meta-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 11px 14px; animation: fadeUp 0.2s ease; }
+  .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-muted); font-weight: 600; margin-bottom: 5px; }
+  .meta-value { font-size: 13px; color: var(--text-primary); font-weight: 500; line-height: 1.45; }
+  .meta-pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: 500; background: var(--blue-50); color: var(--blue-800); border: 1px solid var(--blue-100); margin: 2px 2px 0 0; }
+  .meta-pill.chart { background: var(--lavender-50); color: var(--lavender-600); border-color: var(--lavender-200); }
+  .meta-pill.table-pill { background: var(--teal-50); color: var(--teal-600); border-color: var(--teal-100); }
+
+  /* ── SQL block ── */
+  .sql-block { background: #F0F4FF; border: 1px solid var(--blue-100); border-radius: var(--radius-md); overflow: hidden; animation: fadeUp 0.2s ease; }
+  .sql-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: var(--blue-50); border-bottom: 1px solid var(--blue-100); }
+  .sql-label { font-size: 11px; font-weight: 600; color: var(--blue-800); letter-spacing: 0.5px; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+  .sql-copy-btn { background: none; border: none; cursor: pointer; font-size: 11px; color: var(--blue-600); padding: 2px 8px; border-radius: 6px; transition: background 0.12s; font-family: 'DM Sans', sans-serif; }
+  .sql-copy-btn:hover { background: var(--blue-100); }
+  .sql-code { padding: 12px 14px; font-family: 'DM Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.7; color: var(--slate-700); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; }
+  .sql-code::-webkit-scrollbar { width: 4px; }
+  .sql-code::-webkit-scrollbar-thumb { background: var(--slate-200); border-radius: 4px; }
+
+  /* ── Chart frame ── */
+  .chart-frame-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; animation: fadeUp 0.25s ease; }
+  .chart-frame-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--slate-50); }
+  .chart-frame-title { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+  .chart-open-btn { font-size: 11.5px; color: var(--blue-600); text-decoration: none; padding: 3px 10px; border: 1px solid var(--blue-200); border-radius: 8px; background: var(--blue-50); font-weight: 500; transition: background 0.12s; display: flex; align-items: center; gap: 4px; font-family: 'DM Sans', sans-serif; cursor: pointer; }
+  .chart-open-btn:hover { background: var(--blue-100); }
+  .chart-iframe { width: 100%; height: 400px; border: none; background: white; }
+
+  /* ── Rows badge ── */
+  .rows-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); padding: 4px 10px; background: var(--slate-50); border: 1px solid var(--border); border-radius: 20px; margin-top: 4px; animation: fadeUp 0.2s ease; }
+
+  /* ── Error bubble ── */
+  .error-bubble { background: #FFF3F3; border: 1px solid #FFCDD2; border-radius: var(--radius-md); padding: 11px 15px; font-size: 13px; color: #B71C1C; display: flex; gap: 8px; align-items: flex-start; animation: fadeUp 0.2s ease; }
+  .error-bubble svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  /* ── Retry notice ── */
+  .retry-notice { font-size: 11.5px; color: var(--text-muted); padding: 6px 10px; background: var(--slate-50); border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 6px; animation: fadeUp 0.2s ease; }
+
+  /* ── Bubble action row (copy prompt + timestamp) ── */
+  .bubble-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: -4px;
+    padding: 0 2px;
+    gap: 8px;
+  }
+  .msg-row.user .bubble-actions { flex-direction: row-reverse; }
+
+  /* copy-prompt icon button */
+  .copy-prompt-btn {
+    display: flex; align-items: center; gap: 4px;
+    background: none; border: none; cursor: pointer;
+    padding: 2px 4px; border-radius: 5px;
+    color: var(--text-muted);
+    font-size: 10px; font-family: 'DM Sans', sans-serif;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, background 0.12s;
+  }
+  .copy-prompt-btn svg { width: 11px; height: 11px; }
+  .copy-prompt-btn:hover { color: var(--text-secondary); background: var(--slate-100); }
+  .copy-prompt-btn.copied { color: var(--teal-600); opacity: 1 !important; }
+
+  /* show copy icon on row hover */
+  .msg-row:hover .copy-prompt-btn { opacity: 0.6; }
+  .msg-row:hover .copy-prompt-btn:hover { opacity: 1; }
+
+  /* download csv btn — sits inside rows-badge area */
+  .csv-download-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11.5px; color: var(--teal-600);
+    padding: 3px 10px;
+    border: 1px solid var(--teal-100);
+    border-radius: 8px;
+    background: var(--teal-50);
+    font-weight: 500;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: background 0.12s;
+    text-decoration: none;
+    animation: fadeUp 0.2s ease;
+  }
+  .csv-download-btn:hover { background: var(--teal-100); }
+  .csv-download-btn svg { width: 12px; height: 12px; }
+
+  /* row that holds badge + download side by side */
+  .result-footer {
+    display: flex; align-items: center; gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    animation: fadeUp 0.2s ease;
+  }
+
+  /* ── Input ── */
+  .input-area { background: var(--surface); border-top: 1px solid var(--border); padding: 16px 24px 20px; }
+  .input-wrap { display: flex; align-items: flex-end; gap: 10px; background: var(--slate-50); border: 1.5px solid var(--border-md); border-radius: var(--radius-xl); padding: 10px 10px 10px 18px; transition: border-color 0.15s; }
+  .input-wrap:focus-within { border-color: var(--blue-400); background: var(--surface); box-shadow: 0 0 0 3px rgba(59,130,246,0.08); }
+  #query-input { flex: 1; border: none; background: transparent; font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text-primary); resize: none; outline: none; max-height: 120px; min-height: 22px; line-height: 1.55; }
+  #query-input::placeholder { color: var(--text-muted); }
+  .send-btn { width: 36px; height: 36px; border-radius: 50%; background: var(--blue-600); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s, transform 0.1s; }
+  .send-btn:hover { background: var(--blue-800); }
+  .send-btn:active { transform: scale(0.94); }
+  .send-btn:disabled { background: var(--slate-200); cursor: not-allowed; }
+  .send-btn svg { width: 16px; height: 16px; fill: white; }
+  .input-hint { font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <div>
+        <div class="logo-text">Sarthi</div>
+        <div class="logo-sub">Data Navigator</div>
+      </div>
+    </div>
+    <button class="new-chat-btn" onclick="newChat()">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      New conversation
+    </button>
+  </div>
+
+  <div class="sidebar-section-label">Recent</div>
+  <div class="history-list" id="history-list"></div>
+
+  <div class="sidebar-footer">
+    <div class="db-status">
+      <div class="db-dot"></div>
+      <span id="db-status-text">Connected · FCI</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ── Main ── -->
+<div class="main">
+  <div class="topbar">
+    <span class="topbar-title" id="session-title">New conversation</span>
+    <span class="topbar-badge" id="tables-badge">Loading…</span>
+  </div>
+
+  <div class="chat-area" id="chat-area">
+    <div class="welcome" id="welcome-screen">
+      <h1>Ask your data anything</h1>
+      <p>Sarthi translates your questions into insights — charts, trends, and answers from your database.</p>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-wrap">
+      <textarea id="query-input" rows="1" placeholder="Ask a question about your data…"
+        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button class="send-btn" id="send-btn" onclick="sendQuery()" title="Send">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+    <div class="input-hint">Press <strong>Enter</strong> to send · <strong>Shift+Enter</strong> for new line</div>
+  </div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+let sessions = [];
+let currentSession = null;
+let isLoading = false;
+
+// ─── Timestamp helper ────────────────────────────────────────────────────────
+function nowTs() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function tsEl() {
+  const s = document.createElement('span');
+  s.className = 'msg-ts';
+  s.textContent = nowTs();
+  return s;
+}
+
+// ─── Session management ──────────────────────────────────────────────────────
+function newChat() {
+  const s = { id: Date.now(), title: 'New conversation', messages: [] };
+  sessions.unshift(s);
+  currentSession = s;
+  renderHistory();
+  renderChat();
+  document.getElementById('session-title').textContent = s.title;
+}
+
+function renderHistory() {
+  document.getElementById('history-list').innerHTML = sessions.map(s => `
+    <div class="history-item ${s.id === currentSession?.id ? 'active' : ''}"
+         onclick="switchSession(${s.id})">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+      ${escHtml(s.title)}
+    </div>`).join('');
+}
+
+function switchSession(id) {
+  currentSession = sessions.find(s => s.id === id);
+  renderHistory();
+  renderChat();
+  document.getElementById('session-title').textContent = currentSession.title;
+}
+
+function renderChat() {
+  const area = document.getElementById('chat-area');
+  if (!currentSession || currentSession.messages.length === 0) {
+    area.innerHTML = `<div class="welcome" id="welcome-screen">
+      <h1>Ask your data anything</h1>
+      <p>Sarthi translates your questions into insights — charts, trends, and answers from your database.</p>
+    </div>`;
+    return;
+  }
+  area.innerHTML = '';
+  currentSession.messages.forEach(m => area.appendChild(buildStaticMessage(m)));
+  scrollToBottom();
+}
+
+// ─── Build a fully-static message (for history replay) ───────────────────────
+function buildStaticMessage(m) {
+  if (m.role === 'user') return buildUserRow(m.content, m.ts);
+
+  const row = document.createElement('div');
+  row.className = 'msg-row ai';
+  const bw = document.createElement('div');
+  bw.className = 'bubble-wrap';
+
+  if (m.type === 'error') {
+    bw.appendChild(buildErrorEl(m.content));
+  } else if (m.type === 'result' && m.snapshot) {
+    const snap = m.snapshot;
+    if (snap.thinking)   bw.appendChild(snap.thinking.cloneNode(true));
+    if (snap.meta)       bw.appendChild(snap.meta.cloneNode(true));
+    if (snap.sql)        bw.appendChild(snap.sql.cloneNode(true));
+    if (snap.chart)      bw.appendChild(snap.chart.cloneNode(true));
+    if (snap.rowsBadge)  bw.appendChild(snap.rowsBadge.cloneNode(true));
+  }
+
+  bw.appendChild(tsEl());
+  row.innerHTML = '<div class="avatar ai">S</div>';
+  row.appendChild(bw);
+  return row;
+}
+
+// ─── Static element builders ─────────────────────────────────────────────────
+function buildUserRow(content, ts) {
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+  const bw = document.createElement('div');
+  bw.className = 'bubble-wrap';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble user-bubble';
+  bubble.textContent = content;
+  const t = document.createElement('span');
+  t.className = 'msg-ts';
+  t.textContent = ts || nowTs();
+  bw.appendChild(bubble);
+  bw.appendChild(t);
+  const av = document.createElement('div');
+  av.className = 'avatar user-av';
+  av.textContent = 'U';
+  row.appendChild(bw);
+  row.appendChild(av);
+  return row;
+}
+
+function buildErrorEl(msg) {
+  const d = document.createElement('div');
+  d.className = 'error-bubble';
+  d.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg><span>${escHtml(msg)}</span>`;
+  return d;
+}
+
+function buildThinkingBlock(id) {
+  const wrap = document.createElement('div');
+  wrap.className = 'thinking-block';
+  wrap.innerHTML = `
+    <div class="thinking-header" onclick="toggleThinking('think-${id}')">
+      <svg viewBox="0 0 24 24" fill="currentColor" style="color:var(--blue-400)"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
+      Model reasoning
+      <svg class="thinking-chevron open" id="chev-think-${id}" viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+    </div>
+    <div class="thinking-body open" id="think-${id}"></div>`;
+  return wrap;
+}
+
+function buildSQLBlock(sql, msgId) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sql-block';
+  wrap.innerHTML = `
+    <div class="sql-header">
+      <span class="sql-label">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z"/></svg>
+        Generated SQL
+      </span>
+      <button class="sql-copy-btn" onclick="copySQL('sql-code-${msgId}')">Copy</button>
+    </div>
+    <div class="sql-code" id="sql-code-${msgId}">${escHtml(sql)}</div>`;
+  return wrap;
+}
+
+function buildMetaGrid(tablesUsed, viz) {
+  const wrap = document.createElement('div');
+  wrap.className = 'meta-grid';
+  wrap.innerHTML = `
+    <div class="meta-card">
+      <div class="meta-label">Chart type</div>
+      <div class="meta-value"><span class="meta-pill chart">${escHtml(viz.chart_type)}</span></div>
+    </div>
+    <div class="meta-card">
+      <div class="meta-label">Tables used</div>
+      <div class="meta-value">${tablesUsed.map(t => `<span class="meta-pill table-pill">${escHtml(t)}</span>`).join('')}</div>
+    </div>
+    <div class="meta-card">
+      <div class="meta-label">X axis</div>
+      <div class="meta-value">${escHtml(viz.x_axis || '—')}</div>
+    </div>
+    <div class="meta-card">
+      <div class="meta-label">Y axis</div>
+      <div class="meta-value">${escHtml(viz.y_axis || '—')}</div>
+    </div>`;
+  return wrap;
+}
+
+function buildChartFrame(chartFile, title) {
+  const wrap = document.createElement('div');
+  wrap.className = 'chart-frame-wrap';
+  wrap.innerHTML = `
+    <div class="chart-frame-header">
+      <span class="chart-frame-title">${escHtml(title || 'Chart')}</span>
+      <button class="chart-open-btn" onclick="window.open('${API_BASE}/chart/${encodeURIComponent(chartFile)}','_blank')">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+        Open full chart
+      </button>
+    </div>
+    <iframe class="chart-iframe" src="${API_BASE}/chart/${encodeURIComponent(chartFile)}" loading="lazy"></iframe>`;
+  return wrap;
+}
+
+function buildRowsBadge(rows, cols) {
+  const d = document.createElement('div');
+  d.className = 'rows-badge';
+  d.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>${rows} rows · ${cols} columns`;
+  return d;
+}
+
+// ─── Streaming send ───────────────────────────────────────────────────────────
+async function sendQuery() {
+  const input = document.getElementById('query-input');
+  const question = input.value.trim();
+  if (!question || isLoading) return;
+
+  if (!currentSession) newChat();
+
+  const welcome = document.getElementById('welcome-screen');
+  if (welcome) welcome.remove();
+
+  if (currentSession.messages.length === 0) {
+    currentSession.title = question.length > 42 ? question.slice(0, 42) + '…' : question;
+    document.getElementById('session-title').textContent = currentSession.title;
+    renderHistory();
+  }
+
+  const userTs = nowTs();
+  currentSession.messages.push({ role: 'user', content: question, ts: userTs });
+  input.value = '';
+  autoResize(input);
+
+  // Render user bubble immediately
+  const area = document.getElementById('chat-area');
+  area.appendChild(buildUserRow(question, userTs));
+  scrollToBottom();
+
+  isLoading = true;
+  document.getElementById('send-btn').disabled = true;
+
+  // ── Create AI streaming row ──────────────────────────────────────────────
+  const msgId = Date.now();
+  const aiRow = document.createElement('div');
+  aiRow.className = 'msg-row ai';
+  aiRow.dataset.msgId = msgId;
+
+  const aiAv = document.createElement('div');
+  aiAv.className = 'avatar ai';
+  aiAv.textContent = 'S';
+
+  const bw = document.createElement('div');
+  bw.className = 'bubble-wrap';
+
+  // Initial typing indicator while waiting for first SSE event
+  const typingBubble = document.createElement('div');
+  typingBubble.className = 'bubble ai-bubble';
+  typingBubble.id = `typing-${msgId}`;
+  typingBubble.innerHTML = `<div style="display:flex;gap:4px;align-items:center;padding:2px 0">
+    <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+  </div>`;
+  bw.appendChild(typingBubble);
+
+  aiRow.appendChild(aiAv);
+  aiRow.appendChild(bw);
+  area.appendChild(aiRow);
+  scrollToBottom();
+
+  // State accumulated during streaming
+  let thinkingBlock = null;
+  let thinkingBody  = null;
+  let sqlBlock      = null;
+  let metaBlock     = null;
+  let chartBlock    = null;
+  let rowsBadge     = null;
+  let tsSpan        = null;
+  let tablesUsed    = [];
+  let currentSql    = '';
+  let resultData    = null;
+  let vizData       = null;
+  let attempt       = 0;
+
+  // snapshot for history replay
+  const snapshot = {};
+
+  function removeTyping() {
+    const t = document.getElementById(`typing-${msgId}`);
+    if (t) t.remove();
+  }
+
+  function ensureThinking() {
+    if (!thinkingBlock) {
+      thinkingBlock = buildThinkingBlock(msgId);
+      thinkingBody  = thinkingBlock.querySelector(`#think-${msgId}`);
+      removeTyping();
+      bw.appendChild(thinkingBlock);
+      scrollToBottom();
     }
+  }
 
-    def __init__(self):
-        self._llm   = ChatGoogleGenerativeAI(
-            model=GEMINI_MODEL, google_api_key=GEMINI_API_KEY, temperature=0
-        )
-        self._chain = ChatPromptTemplate.from_messages([
-            ("system", _VIZ_SYSTEM),
-            ("human",  _VIZ_HUMAN),
-        ]) | self._llm
+  function addThinkingStep(iconClass, iconChar, html) {
+    ensureThinking();
+    const step = document.createElement('div');
+    step.className = 'thinking-step';
+    step.innerHTML = `<div class="step-icon ${iconClass}">${iconChar}</div><div>${html}</div>`;
+    thinkingBody.appendChild(step);
+    scrollToBottom();
+  }
 
-    def _extract_requested_chart(self, question: str) -> str:
-        """
-        Detect if the user explicitly mentioned a chart type in their question.
-        Returns the matched chart type string, or 'not specified'.
-        Checks longer phrases first to avoid 'pie' matching inside 'pie chart'.
-        """
-        q_lower = question.lower()
-        for chart_type, keywords in self._CHART_KEYWORDS.items():
-            # Sort keywords longest-first so "pie chart" matches before "pie"
-            for kw in sorted(keywords, key=len, reverse=True):
-                if kw in q_lower:
-                    return chart_type
-        return "not specified"
+  function addOrReplaceTimestamp() {
+    if (tsSpan) tsSpan.remove();
+    tsSpan = tsEl();
+    bw.appendChild(tsSpan);
+  }
 
-    def generate(
-        self,
-        question:    str,
-        sql:         str,
-        columns:     list,
-        sample_data: list,
-    ) -> VizMeta:
-        try:
-            user_requested = self._extract_requested_chart(question)
+  // ── SSE connection ───────────────────────────────────────────────────────
+  // We use fetch + ReadableStream for POST so we can send JSON body
+  let fetchDone = false;
 
-            response = self._chain.invoke({
-                "question":             question,
-                "user_requested_chart": user_requested,
-                "sql":                  sql,
-                "columns":              ", ".join(columns),
-                "row_count":            str(len(sample_data)),
-                "sample_data":          str(sample_data[:5]),
-            })
-            text = response.content.strip()
+  try {
+    const resp = await fetch(`${API_BASE}/query/stream`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ question, max_retries: 3 }),
+    });
 
-            def _parse(key):
-                m = re.search(rf"{key}:\s*(.+)", text, re.IGNORECASE)
-                v = m.group(1).strip() if m else "NONE"
-                return None if v.upper() == "NONE" else v
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-            chosen_type = (_parse("CHART_TYPE") or "table").lower()
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
 
-            # Log whenever model overrides a user-requested chart type
-            if user_requested != "not specified" and chosen_type != user_requested:
-                logger.info(
-                    "VizMetaAgent: user requested '%s', model chose '%s'. "
-                    "Reasoning: %s",
-                    user_requested, chosen_type, _parse("REASONING"),
-                )
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-            return VizMeta(
-                chart_type     = chosen_type,
-                title          = _parse("TITLE") or question[:60],
-                x_axis         = _parse("X_AXIS"),
-                y_axis         = _parse("Y_AXIS"),
-                secondary_axis = _parse("SECONDARY_AXIS"),
-                series_label   = _parse("SERIES_LABEL"),
-                reasoning      = _parse("REASONING") or "",
-            )
+      buffer += decoder.decode(value, { stream: true });
 
-        except Exception as exc:
-            logger.warning("VizMetaAgent failed (%s) — defaulting to table", exc)
-            return VizMeta(chart_type="table", title=question[:60])
+      // SSE frames are separated by \n\n
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop(); // keep incomplete frame
 
+      for (const frame of frames) {
+        if (!frame.trim() || frame.startsWith(':')) continue; // keep-alive comment
 
+        let eventType = 'message';
+        let dataLine  = '';
 
+        for (const line of frame.split('\n')) {
+          if (line.startsWith('event:')) eventType = line.slice(6).trim();
+          if (line.startsWith('data:'))  dataLine  = line.slice(5).trim();
+        }
 
+        if (!dataLine) continue;
+        let payload;
+        try { payload = JSON.parse(dataLine); } catch { continue; }
 
-7. Handle edge cases — if a column has many unique values, limit to top 20 by value.
-8. ALWAYS use this soft pastel color palette for all charts — do not use default Plotly colors:
-   PASTEL_PALETTE = [
-       "#A8C5DA", "#B5D5C5", "#C9B8E8", "#F2C4CE", "#FAD9A1",
-       "#A8D8B9", "#D4B8E0", "#F7C59F", "#B8D4E8", "#E8C5B0",
-   ]
-   - For pie/donut charts : pass color_discrete_sequence=PASTEL_PALETTE to px.pie()
-   - For bar charts       : pass color_discrete_sequence=PASTEL_PALETTE to px.bar()
-                            OR set marker_color=PASTEL_PALETTE[0] for single-series bars
-   - For line charts      : pass color_discrete_sequence=PASTEL_PALETTE to px.line()
-   - For scatter charts   : pass color_discrete_sequence=PASTEL_PALETTE to px.scatter()
-   - For area charts      : pass color_discrete_sequence=PASTEL_PALETTE to px.area()
-   - For heatmap          : use colorscale="Blues" or "Purples" (pastel-friendly)
-   - Always set paper_bgcolor="white" and plot_bgcolor="#FAFBFC" for a clean background.
+        // ── Handle each event type ────────────────────────────────────────
+        switch (eventType) {
+
+          case 'tables_selected': {
+            tablesUsed = payload.tables || [];
+            addThinkingStep(
+              'tables', 'T',
+              `<strong>Tables selected:</strong> ${escHtml(tablesUsed.join(', '))}<br>
+               <span style="color:var(--text-muted)">${escHtml(payload.reasoning || '')}</span>`
+            );
+            addOrReplaceTimestamp();
+            break;
+          }
+
+          case 'sql_generated': {
+            attempt    = payload.attempt;
+            currentSql = payload.sql || '';
+
+            // Remove old SQL block if this is a retry
+            if (sqlBlock) { sqlBlock.remove(); sqlBlock = null; }
+
+            sqlBlock = buildSQLBlock(currentSql, `${msgId}-${attempt}`);
+
+            // Insert sql block after thinkingBlock (or at end)
+            if (thinkingBlock && thinkingBlock.nextSibling) {
+              bw.insertBefore(sqlBlock, thinkingBlock.nextSibling);
+            } else {
+              // insert before timestamp if it exists
+              if (tsSpan && tsSpan.parentNode === bw) {
+                bw.insertBefore(sqlBlock, tsSpan);
+              } else {
+                bw.appendChild(sqlBlock);
+              }
+            }
+
+            if (attempt === 1) {
+              addThinkingStep('sql', '⟨⟩', `<strong>SQL generated</strong> — attempt ${attempt}`);
+            } else {
+              addThinkingStep('sql', '⟨⟩', `<strong>Retrying SQL</strong> — attempt ${attempt}`);
+            }
+            addOrReplaceTimestamp();
+            scrollToBottom();
+            break;
+          }
+
+          case 'sql_error': {
+            // Show retry notice inline
+            const notice = document.createElement('div');
+            notice.className = 'retry-notice';
+            notice.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="color:var(--text-muted)"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+              Validation failed — retrying (attempt ${payload.attempt + 1})`;
+
+            if (tsSpan && tsSpan.parentNode === bw) {
+              bw.insertBefore(notice, tsSpan);
+            } else {
+              bw.appendChild(notice);
+            }
+            addOrReplaceTimestamp();
+            scrollToBottom();
+            break;
+          }
+
+          case 'result': {
+            resultData = payload;
+            tablesUsed = payload.tables_used || tablesUsed;
+
+            // Done step in thinking
+            addThinkingStep(
+              'done', '✓',
+              `<strong>Completed</strong> in ${payload.attempts} attempt${payload.attempts > 1 ? 's' : ''} · ${payload.rows} row${payload.rows !== 1 ? 's' : ''} returned`
+            );
+
+            // Rows badge
+            rowsBadge = buildRowsBadge(payload.rows, (payload.columns || []).length);
+            if (tsSpan && tsSpan.parentNode === bw) {
+              bw.insertBefore(rowsBadge, tsSpan);
+            } else {
+              bw.appendChild(rowsBadge);
+            }
+
+            snapshot.thinking = thinkingBlock;
+            snapshot.sql      = sqlBlock;
+            snapshot.rowsBadge= rowsBadge;
+            addOrReplaceTimestamp();
+            scrollToBottom();
+            break;
+          }
+
+          case 'viz_meta': {
+            vizData = payload;
+
+            // Remove old meta block if exists
+            if (metaBlock) metaBlock.remove();
+            metaBlock = buildMetaGrid(tablesUsed, payload);
+
+            // Insert after thinkingBlock
+            const insertAfter = thinkingBlock || sqlBlock;
+            if (insertAfter && insertAfter.nextSibling) {
+              bw.insertBefore(metaBlock, insertAfter.nextSibling);
+            } else if (sqlBlock) {
+              bw.insertBefore(metaBlock, sqlBlock);
+            } else {
+              if (tsSpan && tsSpan.parentNode === bw) {
+                bw.insertBefore(metaBlock, tsSpan);
+              } else {
+                bw.appendChild(metaBlock);
+              }
+            }
+
+            // Add viz step to thinking
+            addThinkingStep(
+              'viz', 'V',
+              `<strong>Chart decision:</strong> ${escHtml(payload.chart_type)} — ${escHtml(payload.reasoning || '')}`
+            );
+
+            snapshot.meta = metaBlock;
+            addOrReplaceTimestamp();
+            scrollToBottom();
+            break;
+          }
+
+          case 'chart_ready': {
+            if (payload.output_html) {
+              const chartFile = payload.output_html.split('/').pop();
+              chartBlock = buildChartFrame(chartFile, vizData?.title || 'Chart');
+              if (tsSpan && tsSpan.parentNode === bw) {
+                bw.insertBefore(chartBlock, tsSpan);
+              } else {
+                bw.appendChild(chartBlock);
+              }
+              snapshot.chart = chartBlock;
+            } else if (payload.error) {
+              const errEl = buildErrorEl(`Chart generation failed: ${payload.error}`);
+              if (tsSpan && tsSpan.parentNode === bw) {
+                bw.insertBefore(errEl, tsSpan);
+              } else {
+                bw.appendChild(errEl);
+              }
+            }
+            addOrReplaceTimestamp();
+            scrollToBottom();
+            break;
+          }
+
+          case 'pipeline_error': {
+            removeTyping();
+            const errEl = buildErrorEl(payload.error || 'Something went wrong.');
+            if (tsSpan && tsSpan.parentNode === bw) {
+              bw.insertBefore(errEl, tsSpan);
+            } else {
+              bw.appendChild(errEl);
+            }
+            addOrReplaceTimestamp();
+
+            // Save to session history as error
+            currentSession.messages.push({
+              role: 'ai', type: 'error',
+              content: payload.error || 'Something went wrong.',
+            });
+            scrollToBottom();
+            break;
+          }
+
+          case 'done': {
+            fetchDone = true;
+            // Save completed result to session history for replay
+            if (resultData) {
+              currentSession.messages.push({
+                role: 'ai', type: 'result',
+                snapshot: {
+                  thinking:  thinkingBlock,
+                  meta:      metaBlock,
+                  sql:       sqlBlock,
+                  chart:     chartBlock,
+                  rowsBadge: rowsBadge,
+                },
+              });
+            }
+            break;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    removeTyping();
+    const errEl = buildErrorEl(`Could not reach the server. Is the API running at ${API_BASE}?`);
+    bw.appendChild(errEl);
+    bw.appendChild(tsEl());
+    currentSession.messages.push({ role: 'ai', type: 'error', content: err.message });
+  }
+
+  isLoading = false;
+  document.getElementById('send-btn').disabled = false;
+  scrollToBottom();
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function toggleThinking(id) {
+  const body = document.getElementById(id);
+  const chev = document.getElementById('chev-' + id);
+  if (!body) return;
+  body.classList.toggle('open');
+  chev.classList.toggle('open');
+}
+
+function copySQL(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).catch(() => {});
+  const btn = el.previousElementSibling?.querySelector('.sql-copy-btn');
+  if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500); }
+}
+
+function scrollToBottom() {
+  const area = document.getElementById('chat-area');
+  setTimeout(() => area.scrollTop = area.scrollHeight, 30);
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuery(); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function loadHealth() {
+  try {
+    const r = await fetch(`${API_BASE}/health`);
+    const d = await r.json();
+    document.getElementById('tables-badge').textContent = `${d.tables_loaded} tables loaded`;
+  } catch {
+    document.getElementById('tables-badge').style.display = 'none';
+    document.getElementById('db-status-text').textContent = 'Connecting…';
+  }
+}
+
+// Init
+newChat();
+loadHealth();
+</script>
+</body>
+</html>
