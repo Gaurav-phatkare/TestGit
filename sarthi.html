@@ -155,3 +155,22 @@ class VizMetaAgent:
         except Exception as exc:
             logger.warning("VizMetaAgent failed (%s) — defaulting to table", exc)
             return VizMeta(chart_type="table", title=question[:60])
+
+
+
+
+
+7. Handle edge cases — if a column has many unique values, limit to top 20 by value.
+8. ALWAYS use this soft pastel color palette for all charts — do not use default Plotly colors:
+   PASTEL_PALETTE = [
+       "#A8C5DA", "#B5D5C5", "#C9B8E8", "#F2C4CE", "#FAD9A1",
+       "#A8D8B9", "#D4B8E0", "#F7C59F", "#B8D4E8", "#E8C5B0",
+   ]
+   - For pie/donut charts : pass color_discrete_sequence=PASTEL_PALETTE to px.pie()
+   - For bar charts       : pass color_discrete_sequence=PASTEL_PALETTE to px.bar()
+                            OR set marker_color=PASTEL_PALETTE[0] for single-series bars
+   - For line charts      : pass color_discrete_sequence=PASTEL_PALETTE to px.line()
+   - For scatter charts   : pass color_discrete_sequence=PASTEL_PALETTE to px.scatter()
+   - For area charts      : pass color_discrete_sequence=PASTEL_PALETTE to px.area()
+   - For heatmap          : use colorscale="Blues" or "Purples" (pastel-friendly)
+   - Always set paper_bgcolor="white" and plot_bgcolor="#FAFBFC" for a clean background.
