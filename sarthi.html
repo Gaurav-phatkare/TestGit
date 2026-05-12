@@ -1113,3 +1113,106 @@ loadHealth();
 </script>
 </body>
 </html>
+
+
+
+import json
+from flask import Response, stream_with_context
+
+@app.route("/stream", methods=["POST"])
+def stream_query():
+    body = request.get_json(silent=True) or {}
+    question = (body.get("question") or "").strip()
+    if not question:
+        return _err("'question' is required.")
+    if not pipeline.has_tables():
+        return _err("No tables loaded.")
+
+    max_retries = int(body.get("max_retries") or MAX_RETRIES)
+
+    def generate():
+        # Step 1 — table selection
+        try:
+            pinned = PINNED_TABLES
+            pinned_schema = pipeline.loader.all_tables_summary_compact_for(pinned)
+            relevant, reasoning = pipeline._selector.select(
+                all_schemas      = pinned_schema,
+                question         = question,
+                available_tables = pinned,
+                pinned_tables    = None,
+            )
+        except Exception as exc:
+            yield f"data: {json.dumps({'type':'error','message': str(exc)})}\n\n"
+            return
+
+        yield f"data: {json.dumps({'type':'tables','tables': relevant,'reasoning': reasoning})}\n\n"
+
+        # Step 2 — SQL generation
+        schema  = pipeline.loader.schema_for_tables(relevant)
+        dialect = "mssql" if pipeline.loader.uses_mssql_tables(relevant) else "duckdb"
+        try:
+            sql = pipeline._gen_chain.generate(schema=schema, question=question, dialect=dialect)
+        except Exception as exc:
+            yield f"data: {json.dumps({'type':'error','message': str(exc)})}\n\n"
+            return
+
+        yield f"data: {json.dumps({'type':'sql','sql': sql})}\n\n"
+
+        # Step 3 — validate + execute (retry loop)
+        prev_sql, error, lint_warns = None, None, []
+        result_df = None
+        for attempt in range(1, max_retries + 2):
+            is_valid, result_df, val_error, lint_warns = pipeline._validator.validate(
+                sql=sql, schema=schema, question=question, tables_used=relevant
+            )
+            if is_valid:
+                break
+            prev_sql, error = sql, val_error
+            if attempt > max_retries:
+                yield f"data: {json.dumps({'type':'error','message': val_error})}\n\n"
+                return
+            try:
+                sql = pipeline._gen_chain.generate(
+                    schema=schema, question=question,
+                    prev_sql=prev_sql, error=error,
+                    lint_warnings=lint_warns, dialect=dialect,
+                )
+                yield f"data: {json.dumps({'type':'sql','sql': sql})}\n\n"
+            except Exception as exc:
+                yield f"data: {json.dumps({'type':'error','message': str(exc)})}\n\n"
+                return
+
+        import pandas as pd
+        from nl_to_sql_main import _df_to_response, _output_csv_path
+        rows, cols, data = _df_to_response(result_df)
+        csv_path = None
+        if not result_df.empty:
+            csv_path = str(_output_csv_path(question))
+            result_df.to_csv(csv_path, index=False)
+
+        yield f"data: {json.dumps({'type':'data','rows': rows,'columns': cols,'data': data,'output_csv': csv_path})}\n\n"
+
+        # Step 4 — viz metadata
+        try:
+            viz = pipeline._viz_agent.generate(question=question, sql=sql, columns=cols, sample_data=data)
+            yield f"data: {json.dumps({'type':'viz','chart_type': viz.chart_type,'title': viz.title,'x_axis': viz.x_axis,'y_axis': viz.y_axis,'secondary_axis': viz.secondary_axis,'series_label': viz.series_label,'reasoning': viz.reasoning})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'type':'viz_error','message': str(exc)})}\n\n"
+
+        # Step 5 — plotly chart
+        try:
+            plotly_result = pipeline._plotly.generate(question=question, viz_meta=viz, columns=cols, data=data)
+            yield f"data: {json.dumps({'type':'chart','output_html': plotly_result.output_html,'error': plotly_result.error})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'type':'chart','output_html': None,'error': str(exc)})}\n\n"
+
+        yield f"data: {json.dumps({'type':'done'})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
